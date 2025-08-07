@@ -6,17 +6,23 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class RedisBroker:
-    def __init__(self, redis_url: str = "redis://localhost:6379"):
+    def __init__(self, redis_url: str = "redis://localhost:6379", redis_password: Optional[str] = "42a6A#8epiwj?A:R?DqCKpn5f"):
         self.redis_url = redis_url
+        self.redis_password = redis_password
         self.redis_client: Optional[redis.Redis] = None
         self.pubsub = None
         self.subscribers: Dict[str, Callable] = {}
-        
+
     async def connect(self):
         """Connect to Redis"""
         try:
-            self.redis_client = redis.from_url(self.redis_url, decode_responses=True)
+            self.redis_client = redis.from_url(
+                self.redis_url,
+                password=self.redis_password,
+                decode_responses=True
+            )
             self.pubsub = self.redis_client.pubsub()
             logger.info("Connected to Redis successfully")
         except Exception as e:
@@ -35,7 +41,7 @@ class RedisBroker:
         """Publish a message to a Redis channel"""
         if not self.redis_client:
             raise RuntimeError("Redis client not connected")
-        
+
         try:
             message_str = json.dumps(message, default=str)
             await self.redis_client.publish(channel, message_str)
@@ -48,7 +54,7 @@ class RedisBroker:
         """Subscribe to a Redis channel with a callback"""
         if not self.pubsub:
             raise RuntimeError("Redis pubsub not initialized")
-        
+
         try:
             await self.pubsub.subscribe(channel)
             self.subscribers[channel] = callback
@@ -61,7 +67,7 @@ class RedisBroker:
         """Unsubscribe from a Redis channel"""
         if not self.pubsub:
             return
-        
+
         try:
             await self.pubsub.unsubscribe(channel)
             if channel in self.subscribers:
@@ -74,13 +80,13 @@ class RedisBroker:
         """Listen for messages on subscribed channels"""
         if not self.pubsub:
             raise RuntimeError("Redis pubsub not initialized")
-        
+
         try:
             async for message in self.pubsub.listen():
                 if message['type'] == 'message':
                     channel = message['channel']
                     data = json.loads(message['data'])
-                    
+
                     if channel in self.subscribers:
                         callback = self.subscribers[channel]
                         try:
@@ -94,17 +100,19 @@ class RedisBroker:
     @staticmethod
     def get_community_channel(community_id: str) -> str:
         return f"community:{community_id}"
-    
+
     @staticmethod
     def get_thread_channel(thread_id: str) -> str:
         return f"thread:{thread_id}"
-    
+
     @staticmethod
     def get_global_channel() -> str:
         return "global:notifications"
 
+
 # Global broker instance
 redis_broker = RedisBroker()
+
 
 # Message types for different events
 class MessageTypes:
@@ -118,6 +126,7 @@ class MessageTypes:
     TYPING = "typing"
     STOP_TYPING = "stop_typing"
 
+
 async def publish_thread_event(thread_data: dict, event_type: str = MessageTypes.NEW_THREAD):
     """Publish thread-related events"""
     community_id = thread_data.get('community_id')
@@ -130,6 +139,7 @@ async def publish_thread_event(thread_data: dict, event_type: str = MessageTypes
         }
         await redis_broker.publish(channel, message)
 
+
 async def publish_message_event(message_data: dict, event_type: str = MessageTypes.NEW_MESSAGE):
     """Publish message-related events"""
     thread_id = message_data.get('thread_id')
@@ -141,6 +151,7 @@ async def publish_message_event(message_data: dict, event_type: str = MessageTyp
             'timestamp': message_data.get('created_at') or message_data.get('updated_at')
         }
         await redis_broker.publish(channel, message)
+
 
 async def publish_member_event(member_data: dict, community_id: str, event_type: str):
     """Publish member-related events"""

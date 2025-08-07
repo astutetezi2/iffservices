@@ -163,7 +163,7 @@ db.threads.createIndex({ 'last_activity': -1 });
 db.threads.createIndex({ 'community_id': 1, 'last_activity': -1 });
 db.threads.createIndex({ 'community_id': 1, 'is_pinned': -1, 'last_activity': -1 });
 
-// Messages indexes  
+// Messages indexes
 db.messages.createIndex({ 'thread_id': 1 });
 db.messages.createIndex({ 'author': 1 });
 db.messages.createIndex({ 'created_at': 1 });
