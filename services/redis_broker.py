@@ -4,11 +4,15 @@ import redis.asyncio as redis
 from typing import Optional, Callable, Dict, Any
 import logging
 
+from bson import ObjectId
+
+from api.routes.auth import db
+
 logger = logging.getLogger(__name__)
 
 
 class RedisBroker:
-    def __init__(self, redis_url: str = "redis://localhost:6379", redis_password: Optional[str] = "42a6A#8epiwj?A:R?DqCKpn5f"):
+    def __init__(self, redis_url: str = "redis://localhost:6379", redis_password: Optional[str] = None):
         self.redis_url = redis_url
         self.redis_password = redis_password
         self.redis_client: Optional[redis.Redis] = None
@@ -126,22 +130,26 @@ class MessageTypes:
     TYPING = "typing"
     STOP_TYPING = "stop_typing"
 
-
-async def publish_thread_event(thread_data: dict, event_type: str = MessageTypes.NEW_THREAD):
+def publish_thread_event(thread_data: dict, event_type: str = MessageTypes.NEW_THREAD):
     """Publish thread-related events"""
     community_id = thread_data.get('community_id')
+
     if community_id:
+        thread_data['created_by'] = thread_data.get('author')
         channel = RedisBroker.get_community_channel(community_id)
         message = {
             'type': event_type,
             'data': thread_data,
             'timestamp': thread_data.get('created_at') or thread_data.get('updated_at')
         }
-        await redis_broker.publish(channel, message)
+
+        # Publish to Redis
+        asyncio.run(redis_broker.publish(channel, message))
 
 
-async def publish_message_event(message_data: dict, event_type: str = MessageTypes.NEW_MESSAGE):
+def publish_message_event(message_data: dict, event_type: str = MessageTypes.NEW_MESSAGE):
     """Publish message-related events"""
+    print("publishing:" + MessageTypes.NEW_MESSAGE)
     thread_id = message_data.get('thread_id')
     if thread_id:
         channel = RedisBroker.get_thread_channel(thread_id)
@@ -150,10 +158,10 @@ async def publish_message_event(message_data: dict, event_type: str = MessageTyp
             'data': message_data,
             'timestamp': message_data.get('created_at') or message_data.get('updated_at')
         }
-        await redis_broker.publish(channel, message)
+        redis_broker.publish(channel, message)
 
 
-async def publish_member_event(member_data: dict, community_id: str, event_type: str):
+def publish_member_event(member_data: dict, community_id: str, event_type: str):
     """Publish member-related events"""
     channel = RedisBroker.get_community_channel(community_id)
     message = {
@@ -162,4 +170,4 @@ async def publish_member_event(member_data: dict, community_id: str, event_type:
         'community_id': community_id,
         'timestamp': member_data.get('joined_at')
     }
-    await redis_broker.publish(channel, message)
+    redis_broker.publish(channel, message)

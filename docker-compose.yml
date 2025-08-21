@@ -1,67 +1,44 @@
-version: '3.8'
+version: "3.8"
 
 services:
-  # MongoDB database
-  mongodb:
-    image: mongo:7.0
-    container_name: communities_mongodb
-    restart: unless-stopped
-    ports:
-      - "27017:27017"
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: password
-      MONGO_INITDB_DATABASE: communities_db
-    volumes:
-      - mongodb_data:/data/db
-      - ./scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
-    networks:
-      - communities_network
-
-  # Redis for pub/sub
-  redis:
-    image: redis:7.2-alpine
-    container_name: communities_redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    command: redis-server --appendonly yes
-    volumes:
-      - redis_data:/data
-    networks:
-      - communities_network
-
-  # FastAPI backend
-  backend:
+  app:
     build: .
-    container_name: communities_backend
-    restart: unless-stopped
+    container_name: iffservices
+    command: hypercorn main:app --bind 0.0.0.0:5001 --reload
     ports:
       - "5001:5001"
     environment:
-      MONGODB_URL: mongodb://admin:password@mongodb:27017/communities_db?authSource=admin
-      REDIS_URL: redis://redis:6379
-      HOST: 0.0.0.0
-      PORT: 5001
-      DEBUG: "true"
+      MONGO_URI: mongodb://mongodb:27017/
+      MONGO_DB_NAME: communities_db
+      JWT_SECRET: 42a6A#8epiwj?A:R?DqCKpn5f
+      JWT_ALGORITHM: HS256
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      # REDIS_PASSWORD: mypassword  # uncomment if Redis auth is enabled
     depends_on:
       - mongodb
       - redis
+
+  mongodb:
+    image: mongo:6.0
+    container_name: mongodb
+    restart: always
+    ports:
+      - "27017:27017"
     volumes:
-      - .:/app
-    networks:
-      - communities_network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      - mongodb_data:/data/db
+
+  redis:
+    image: redis:7.2
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"
+    # command: ["redis-server", "--requirepass", "mypassword"] # uncomment if you want password auth
+    volumes:
+      - redis_data:/data
 
 volumes:
   mongodb_data:
   redis_data:
-
-networks:
-  communities_network:
-    driver: bridge

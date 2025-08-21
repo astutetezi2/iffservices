@@ -1,3 +1,5 @@
+import configparser
+
 from motor.motor_asyncio import AsyncIOMotorClient
 from typing import Optional
 import os
@@ -5,6 +7,10 @@ from datetime import datetime
 from bson import ObjectId
 from pydantic import BaseModel, Field
 from typing import List, Optional, Any
+
+from pymongo import MongoClient
+config = configparser.ConfigParser()
+config.read('config.ini')
 
 class PyObjectId(ObjectId):
     @classmethod
@@ -82,6 +88,7 @@ class Member(BaseModel):
     joined_at: datetime = Field(default_factory=datetime.utcnow)
     is_active: bool = True
     communities: List[str] = []
+    hashed_password: str
 
     class Config:
         allow_population_by_field_name = True
@@ -99,7 +106,11 @@ class Database:
         cls.database = cls.client.communities_db
         
         # Create indexes for better performance
-        await cls.create_indexes()
+        # await cls.create_indexes()
+
+    def connect_to_mongo_sync(self):
+        client = MongoClient(config['database']['mongo_uri'])
+        self.database = client[config['database']['db_name']]
 
     @classmethod
     async def close_mongo_connection(cls):
